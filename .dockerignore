@@ -1,0 +1,5 @@
+.git
+.railway
+_tmp*
+_tmp-kmz
+node_modules

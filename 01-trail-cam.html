@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mockup A — Trail Cam | Bigfoot Sightings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #0a100c;
+      --panel: rgba(8, 16, 12, 0.88);
+      --ir: #6dff9a;
+      --ir-dim: #2a6b45;
+      --fog: #9bb5a4;
+      --line: rgba(109, 255, 154, 0.22);
+      --warn: #c8ff6d;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fog);
+      font-family: "IBM Plex Mono", monospace;
+      overflow: hidden;
+    }
+
+    .stage {
+      position: relative;
+      height: 100%;
+      isolation: isolate;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background: #2a3230;
+    }
+
+    /* Color grade tiles only — never the markers */
+    .leaflet-tile-pane {
+      filter: grayscale(0.25) contrast(1.02) brightness(1.28) sepia(0.12) hue-rotate(70deg);
+    }
+
+    /* Camera overlays sit under the map so silhouettes stay visible */
+    .scanlines,
+    .vignette {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    .scanlines {
+      background:
+        repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0.08) 0px,
+          rgba(0, 0, 0, 0.08) 1px,
+          transparent 2px,
+          transparent 4px
+        );
+      mix-blend-mode: multiply;
+      opacity: 0.22;
+      animation: flicker 6s steps(2) infinite;
+    }
+
+    @keyframes flicker {
+      0%, 92%, 100% { opacity: 0.22; }
+      93% { opacity: 0.12; }
+      94% { opacity: 0.26; }
+    }
+
+    .vignette {
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.22) 100%);
+    }
+
+    .chrome {
+      position: absolute;
+      z-index: 5;
+      left: 0;
+      right: 0;
+      top: 0;
+      padding: 1.25rem 1.5rem 0;
+      pointer-events: none;
+    }
+
+    .chrome > * { pointer-events: auto; }
+
+    .brand-block {
+      max-width: 28rem;
+    }
+
+    .brand {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: clamp(3.5rem, 9vw, 6.5rem);
+      line-height: 0.85;
+      letter-spacing: 0.04em;
+      color: var(--ir);
+      text-shadow: 0 0 24px rgba(109, 255, 154, 0.35);
+      animation: brandPulse 4s ease-in-out infinite;
+    }
+
+    @keyframes brandPulse {
+      0%, 100% { text-shadow: 0 0 18px rgba(109, 255, 154, 0.25); }
+      50% { text-shadow: 0 0 32px rgba(109, 255, 154, 0.55); }
+    }
+
+    .tagline {
+      margin-top: 0.65rem;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fog);
+      max-width: 22rem;
+    }
+
+    .hud {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+      padding: 0.85rem 1rem;
+      min-width: min(24rem, 90vw);
+    }
+
+    .hud-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ir-dim);
+      margin-bottom: 0.55rem;
+    }
+
+    .ranges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .ranges button {
+      font-family: inherit;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: transparent;
+      color: var(--fog);
+      border: 1px solid var(--line);
+      padding: 0.45rem 0.65rem;
+      cursor: pointer;
+      transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+    }
+
+    .ranges button:hover {
+      border-color: var(--ir);
+      color: var(--ir);
+    }
+
+    .ranges button.active {
+      background: var(--ir);
+      color: #041008;
+      border-color: var(--ir);
+      font-weight: 600;
+    }
+
+    .meta {
+      margin-top: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.7rem;
+      color: var(--warn);
+    }
+
+    .footer-bar {
+      position: absolute;
+      z-index: 5;
+      left: 1.5rem;
+      bottom: 1.25rem;
+      right: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 1rem;
+      pointer-events: none;
+    }
+
+    .footer-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.55rem;
+      pointer-events: auto;
+    }
+
+    .rec {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      color: var(--ir);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 0.45rem 0.7rem;
+      pointer-events: auto;
+    }
+
+    .rec-dot {
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 50%;
+      background: #ff4d4d;
+      box-shadow: 0 0 8px #ff4d4d;
+      animation: blink 1.2s steps(1) infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.15; }
+    }
+
+    .hint {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(155, 181, 164, 0.75);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 0.45rem 0.7rem;
+      pointer-events: auto;
+    }
+
+    .leaflet-control-zoom {
+      border: 1px solid var(--line) !important;
+      box-shadow: none !important;
+    }
+
+    .leaflet-control-zoom a {
+      background: var(--panel) !important;
+      color: var(--ir) !important;
+      border-bottom-color: var(--line) !important;
+      width: 32px !important;
+      height: 32px !important;
+      line-height: 32px !important;
+      font-size: 16px !important;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(0, 0, 0, 0.55) !important;
+      color: rgba(155, 181, 164, 0.7) !important;
+      font-family: "IBM Plex Mono", monospace !important;
+      font-size: 10px !important;
+    }
+
+    .leaflet-control-attribution a { color: var(--ir) !important; }
+
+    .bf-div-icon {
+      background: transparent !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+
+    .bf-marker {
+      width: 32px;
+      height: 42px;
+      display: grid;
+      place-items: end center;
+      transition: transform 160ms ease;
+    }
+
+    .bf-silhouette {
+      display: block;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .bf-marker:hover { transform: scale(1.08); }
+
+    .leaflet-popup-content-wrapper {
+      background: #0b1610;
+      color: var(--fog);
+      border: 1px solid var(--ir);
+      border-radius: 0;
+      box-shadow: 0 0 24px rgba(109, 255, 154, 0.2);
+      font-family: "IBM Plex Mono", monospace;
+    }
+
+    .leaflet-popup-tip { background: #0b1610; border: 1px solid var(--ir); }
+    .leaflet-popup-close-button { color: var(--ir) !important; }
+
+    .popup-title {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 1.4rem;
+      letter-spacing: 0.06em;
+      color: var(--ir);
+      margin-bottom: 0.35rem;
+    }
+
+    .popup-row {
+      font-size: 0.72rem;
+      margin-top: 0.35rem;
+      display: grid;
+      grid-template-columns: 5rem 1fr;
+      gap: 0.35rem;
+    }
+
+    .popup-row span:first-child {
+      color: var(--ir-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .popup-link {
+      display: inline-block;
+      margin-top: 0.65rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ir);
+    }
+
+    @media (max-width: 720px) {
+      .chrome { padding: 1rem; }
+      .brand { font-size: 3.2rem; }
+      .footer-bar { left: 1rem; right: 1rem; bottom: 1rem; flex-direction: column; align-items: start; }
+      .hud { min-width: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div id="map" role="application" aria-label="US Bigfoot sightings map"></div>
+    <div class="scanlines" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <header class="chrome">
+      <div class="brand-block">
+        <h1 class="brand">BIGFOOT</h1>
+        <p class="tagline">Infrared trail-cam feed of BFRO-reported sightings across the contiguous United States.</p>
+      </div>
+    </header>
+
+    <div class="footer-bar">
+      <div class="footer-left">
+        <div class="hud">
+          <div class="hud-label">Report window</div>
+          <div class="ranges" role="tablist" aria-label="Time range">
+            <button type="button" data-range="recent" class="active">Recently posted</button>
+            <button type="button" data-range="year">This year</button>
+            <button type="button" data-range="all">All time</button>
+          </div>
+          <div class="meta">
+            <span id="countLabel">0 contacts</span>
+            <span>BFRO · CAM-07</span>
+          </div>
+        </div>
+        <div class="rec"><span class="rec-dot" aria-hidden="true"></span> REC · LIVE OVERLAY</div>
+      </div>
+      <div class="hint">Scroll to zoom · drag to pan · tap a silhouette</div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="./shared-sightings.js"></script>
+  <script>
+    const map = L.map("map", {
+      center: [39.5, -98.35],
+      zoom: 4,
+      minZoom: 3,
+      maxZoom: 12,
+      zoomControl: true,
+      worldCopyJump: false,
+    });
+
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles &copy; Esri",
+      maxZoom: 16,
+    }).addTo(map);
+
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles &copy; Esri · Reports &copy; <a href=\"https://www.bfro.net/GDB/\">BFRO</a>",
+      maxZoom: 16,
+      opacity: 0.85,
+    }).addTo(map);
+
+    const iconHtml = BF_markerSvg("#6dff9a", 32, 42, { glow: true });
+
+    const bfIcon = L.divIcon({
+      className: "bf-div-icon",
+      html: `<div class="bf-marker">${iconHtml}</div>`,
+      iconSize: [32, 42],
+      iconAnchor: [16, 42],
+      popupAnchor: [0, -38],
+    });
+
+    const layer = L.layerGroup().addTo(map);
+    let activeRange = "recent";
+
+    function render() {
+      layer.clearLayers();
+      const visible = BF_SIGHTINGS.filter((s) => BF_inWindow(s, activeRange));
+
+      visible.forEach((s) => {
+        const f = BF_popupFields(s);
+        const marker = L.marker([s.lat, s.lng], { icon: bfIcon });
+        marker.bindPopup(`
+          <div class="popup-title">CONTACT</div>
+          <div class="popup-row"><span>Location</span><span>${BF_esc(f.location)}</span></div>
+          <div class="popup-row"><span>Date</span><span>${BF_esc(f.date)}</span></div>
+          <div class="popup-row"><span>Time</span><span>${BF_esc(f.time)}</span></div>
+          <div class="popup-row"><span>Type</span><span>${BF_esc(f.type)} · ${BF_esc(f.klass)}</span></div>
+          <a class="popup-link" href="${BF_esc(f.url)}" target="_blank" rel="noopener">BFRO report ${BF_esc(s.id)} ↗</a>
+        `);
+        marker.addTo(layer);
+      });
+
+      document.getElementById("countLabel").textContent =
+        `${visible.length} contact${visible.length === 1 ? "" : "s"}`;
+    }
+
+    document.querySelectorAll(".ranges button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".ranges button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeRange = btn.dataset.range;
+        render();
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>

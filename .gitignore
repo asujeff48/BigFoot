@@ -1,0 +1,7 @@
+_tmp*
+_tmp-kmz/
+node_modules/
+.railway
+.DS_Store
+Thumbs.db
+*.log

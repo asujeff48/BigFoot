@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mockup C — Contour Ops | Bigfoot Sightings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --slate: #1a2330;
+      --panel: rgba(18, 28, 40, 0.9);
+      --sand: #d6c4a1;
+      --topo: #7ea38a;
+      --signal: #e8a23a;
+      --mute: #8fa0b3;
+      --line: rgba(214, 196, 161, 0.22);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--slate);
+      color: var(--sand);
+      font-family: Barlow, sans-serif;
+      overflow: hidden;
+    }
+
+    .layout {
+      height: 100%;
+      display: grid;
+      grid-template-columns: minmax(16rem, 22rem) 1fr;
+    }
+
+    .sidebar {
+      position: relative;
+      z-index: 3;
+      background:
+        linear-gradient(180deg, #243247 0%, #1a2330 55%, #121a24 100%);
+      border-right: 1px solid var(--line);
+      padding: 1.5rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      overflow: auto;
+    }
+
+    .sidebar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.08;
+      background-image: repeating-linear-gradient(
+        -18deg,
+        transparent,
+        transparent 10px,
+        rgba(214, 196, 161, 0.35) 10px,
+        rgba(214, 196, 161, 0.35) 11px
+      );
+    }
+
+    .brand {
+      font-family: "Barlow Condensed", sans-serif;
+      font-weight: 800;
+      font-size: clamp(3rem, 5vw, 4.4rem);
+      line-height: 0.85;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--sand);
+      animation: titleIn 650ms ease both;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--signal);
+    }
+
+    @keyframes titleIn {
+      from { opacity: 0; letter-spacing: 0.12em; }
+      to { opacity: 1; letter-spacing: 0.02em; }
+    }
+
+    .lede {
+      font-size: 0.95rem;
+      line-height: 1.45;
+      color: var(--mute);
+      max-width: 18rem;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: rgba(12, 18, 28, 0.55);
+      padding: 0.9rem;
+    }
+
+    .panel h2 {
+      font-family: "Barlow Condensed", sans-serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--topo);
+      margin-bottom: 0.75rem;
+    }
+
+    .ranges {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .ranges button {
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-align: left;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--sand);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+    }
+
+    .ranges button:hover {
+      border-color: var(--sand);
+    }
+
+    .ranges button.active {
+      background: var(--signal);
+      border-color: var(--signal);
+      color: #1a150c;
+    }
+
+    .ranges button .chip {
+      font-size: 0.72rem;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+
+    .stat {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+    }
+
+    .stat div {
+      border: 1px solid var(--line);
+      padding: 0.7rem;
+    }
+
+    .stat strong {
+      display: block;
+      font-family: "Barlow Condensed", sans-serif;
+      font-size: 1.8rem;
+      line-height: 1;
+      color: var(--signal);
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 0.25rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--mute);
+    }
+
+    .help {
+      margin-top: auto;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      color: var(--mute);
+      border-top: 1px solid var(--line);
+      padding-top: 1rem;
+    }
+
+    .map-wrap {
+      position: relative;
+      min-width: 0;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      background: #1e2a24;
+    }
+
+    .map-badge {
+      position: absolute;
+      z-index: 5;
+      top: 1rem;
+      right: 1rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 0.55rem 0.8rem;
+      font-family: "Barlow Condensed", sans-serif;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      color: var(--topo);
+      animation: badgePulse 3.5s ease-in-out infinite;
+    }
+
+    @keyframes badgePulse {
+      0%, 100% { border-color: var(--line); }
+      50% { border-color: rgba(232, 162, 58, 0.55); }
+    }
+
+    .leaflet-control-zoom {
+      border: 1px solid var(--line) !important;
+      box-shadow: none !important;
+      margin-left: 1rem !important;
+      margin-top: 1rem !important;
+    }
+
+    .leaflet-control-zoom a {
+      background: var(--panel) !important;
+      color: var(--sand) !important;
+      border-bottom-color: var(--line) !important;
+      width: 34px !important;
+      height: 34px !important;
+      line-height: 34px !important;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(18, 28, 40, 0.75) !important;
+      color: var(--mute) !important;
+      font-family: Barlow, sans-serif !important;
+    }
+
+    .leaflet-control-attribution a { color: var(--topo) !important; }
+
+    .bf-div-icon {
+      background: transparent !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+
+    .bf-marker {
+      width: 50px;
+      height: 62px;
+      display: grid;
+      place-items: end center;
+      transition: transform 150ms ease;
+    }
+
+    .bf-silhouette {
+      display: block;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .bf-marker:hover { transform: scale(1.1); }
+
+    .leaflet-popup-content-wrapper {
+      background: #121a24;
+      color: var(--sand);
+      border-radius: 0;
+      border: 1px solid var(--signal);
+      box-shadow: none;
+      font-family: Barlow, sans-serif;
+    }
+
+    .leaflet-popup-tip { background: #121a24; }
+    .leaflet-popup-close-button { color: var(--signal) !important; }
+
+    .popup-kicker {
+      font-family: "Barlow Condensed", sans-serif;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      color: var(--signal);
+      margin-bottom: 0.2rem;
+    }
+
+    .popup-title {
+      font-family: "Barlow Condensed", sans-serif;
+      font-size: 1.35rem;
+      line-height: 1.1;
+      margin-bottom: 0.55rem;
+    }
+
+    .popup-grid {
+      display: grid;
+      grid-template-columns: 4.2rem 1fr;
+      gap: 0.3rem 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .popup-grid span:nth-child(odd) {
+      color: var(--mute);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.7rem;
+      padding-top: 0.15rem;
+    }
+
+    @media (max-width: 840px) {
+      .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+        max-height: 42vh;
+      }
+      .ranges { display: grid; grid-template-columns: 1fr 1fr; }
+      .help { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div>
+        <h1 class="brand">Bigfoot<span>Map</span></h1>
+        <p class="lede" style="margin-top: 0.85rem;">Contour-ops view of reported contacts. Filter the window, then interrogate each marker.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Time window</h2>
+        <div class="ranges" role="tablist" aria-label="Time window">
+          <button type="button" data-range="recent" class="active">Recently posted <span class="chip" data-chip="recent">—</span></button>
+          <button type="button" data-range="year">This year <span class="chip" data-chip="year">—</span></button>
+          <button type="button" data-range="all">All time <span class="chip" data-chip="all">—</span></button>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div>
+          <strong id="activeCount">0</strong>
+          <span>On map</span>
+        </div>
+        <div>
+          <strong id="monthCount">0</strong>
+          <span>This year</span>
+        </div>
+      </div>
+
+      <p class="help">Zoom and scroll the continental basemap. Click any Bigfoot symbol for location, date, and time.</p>
+    </aside>
+
+    <div class="map-wrap">
+      <div id="map" role="application" aria-label="US Bigfoot sightings map"></div>
+      <div class="map-badge">US CONUS · BFRO</div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="./shared-sightings.js"></script>
+  <script>
+    const map = L.map("map", {
+      center: [39.5, -96.5],
+      zoom: 4,
+      minZoom: 3,
+      maxZoom: 12,
+    });
+
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles &copy; Esri",
+      maxZoom: 19,
+    }).addTo(map);
+
+    const iconHtml = BF_markerSvg("#e8a23a", 50, 62, { shadow: true });
+
+    const bfIcon = L.divIcon({
+      className: "bf-div-icon",
+      html: `<div class="bf-marker">${iconHtml}</div>`,
+      iconSize: [50, 62],
+      iconAnchor: [25, 62],
+      popupAnchor: [0, -56],
+    });
+
+    const layer = L.layerGroup().addTo(map);
+    let activeRange = "recent";
+
+    function countFor(rangeKey) {
+      return BF_SIGHTINGS.filter((s) => BF_inWindow(s, rangeKey)).length;
+    }
+
+    function updateChips() {
+      ["recent", "year", "all"].forEach((key) => {
+        const el = document.querySelector(`[data-chip="${key}"]`);
+        if (el) el.textContent = String(countFor(key));
+      });
+      document.getElementById("monthCount").textContent = String(countFor("year"));
+    }
+
+    function render() {
+      layer.clearLayers();
+      const visible = BF_SIGHTINGS.filter((s) => BF_inWindow(s, activeRange));
+
+      visible.forEach((s) => {
+        const f = BF_popupFields(s);
+        L.marker([s.lat, s.lng], { icon: bfIcon })
+          .bindPopup(`
+            <div class="popup-kicker">Sighting report</div>
+            <div class="popup-title">${BF_esc(s.place)}</div>
+            <div class="popup-grid">
+              <span>Location</span><span>${BF_esc(s.region)}</span>
+              <span>Date</span><span>${BF_esc(f.date)}</span>
+              <span>Time</span><span>${BF_esc(f.time)}</span>
+              <span>Type</span><span>${BF_esc(f.type)} · ${BF_esc(f.klass)}</span>
+            </div>
+            <p style="margin-top:0.65rem;font-size:0.8rem"><a href="${BF_esc(f.url)}" target="_blank" rel="noopener" style="color:var(--signal)">BFRO report ${BF_esc(s.id)}</a></p>
+          `)
+          .addTo(layer);
+      });
+
+      document.getElementById("activeCount").textContent = String(visible.length);
+    }
+
+    document.querySelectorAll(".ranges button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".ranges button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeRange = btn.dataset.range;
+        render();
+      });
+    });
+
+    updateChips();
+    render();
+  </script>
+</body>
+</html>
