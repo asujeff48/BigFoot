@@ -224,6 +224,38 @@
       51%, 100% { opacity: 0.15; }
     }
 
+    .footer-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.55rem;
+      pointer-events: auto;
+      max-width: min(22rem, 90vw);
+    }
+
+    .legend {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+      padding: 0.85rem 1rem;
+    }
+
+    .legend-note {
+      font-size: 0.62rem;
+      line-height: 1.4;
+      color: var(--warn);
+      margin: 0 0 0.15rem;
+    }
+
+    .legend-row {
+      display: grid;
+      grid-template-columns: 4.4rem 1fr;
+      gap: 0.45rem 0.65rem;
+      margin-top: 0.45rem;
+      font-size: 0.68rem;
+      line-height: 1.35;
+    }
+
     .hint {
       font-size: 0.68rem;
       letter-spacing: 0.08em;
@@ -232,7 +264,24 @@
       background: var(--panel);
       border: 1px solid var(--line);
       padding: 0.45rem 0.7rem;
-      pointer-events: auto;
+    }
+
+    .legend-row dt {
+      color: var(--ir);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .legend-row dd {
+      margin: 0;
+      color: var(--fog);
+    }
+
+    .popup-note {
+      margin-top: 0.45rem;
+      font-size: 0.68rem;
+      line-height: 1.4;
+      color: var(--fog);
     }
 
     .leaflet-control-zoom {
@@ -329,6 +378,7 @@
       .brand { font-size: 3.2rem; }
       .footer-bar { left: 1rem; right: 1rem; bottom: 1rem; flex-direction: column; align-items: start; }
       .hud { min-width: 0; width: 100%; }
+      .footer-right { align-items: stretch; max-width: none; width: 100%; }
     }
   </style>
 </head>
@@ -361,7 +411,14 @@
         </div>
         <div class="rec"><span class="rec-dot" aria-hidden="true"></span> REC · LIVE OVERLAY</div>
       </div>
-      <div class="hint">Scroll to zoom · drag to pan · tap a silhouette</div>
+      <div class="footer-right">
+        <div class="legend">
+          <div class="hud-label">BFRO class</div>
+          <p class="legend-note" id="classNote"></p>
+          <dl class="legend-row" id="classLegend"></dl>
+        </div>
+        <div class="hint">Scroll to zoom · drag to pan · tap a silhouette</div>
+      </div>
     </div>
   </div>
 
@@ -398,6 +455,9 @@
       popupAnchor: [0, -38],
     });
 
+    document.getElementById("classNote").textContent = BF_CLASS_NOTE;
+    document.getElementById("classLegend").innerHTML = BF_classLegendHtml();
+
     const layer = L.layerGroup().addTo(map);
     let activeRange = "recent";
 
@@ -414,6 +474,7 @@
           <div class="popup-row"><span>Date</span><span>${BF_esc(f.date)}</span></div>
           <div class="popup-row"><span>Time</span><span>${BF_esc(f.time)}</span></div>
           <div class="popup-row"><span>Type</span><span>${BF_esc(f.type)} · ${BF_esc(f.klass)}</span></div>
+          <p class="popup-note">${BF_esc(f.classMeaning)}</p>
           <a class="popup-link" href="${BF_esc(f.url)}" target="_blank" rel="noopener">BFRO report ${BF_esc(s.id)} ↗</a>
         `);
         marker.addTo(layer);

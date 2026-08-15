@@ -661,14 +661,42 @@ window.BF_formatWhen = function (s) {
   return { date: date, time: s.sightingTime || "Not reported" };
 };
 
+window.BF_CLASSES = {
+  A: {
+    label: "Class A",
+    meaning: "Clear sighting. Other animals can be ruled out with greater confidence.",
+  },
+  B: {
+    label: "Class B",
+    meaning: "Distant, poorly lit, or unclear view — or sounds and tracks with no clear visual.",
+  },
+  C: {
+    label: "Class C",
+    meaning: "Second-hand or untraceable story. Rarely shown on this map.",
+  },
+};
+
+window.BF_CLASS_NOTE = "A and B describe how clear the encounter was, not how believable it is.";
+
+window.BF_classLegendHtml = function () {
+  return Object.keys(window.BF_CLASSES)
+    .map(function (code) {
+      const c = window.BF_CLASSES[code];
+      return "<dt>" + window.BF_esc(c.label) + "</dt><dd>" + window.BF_esc(c.meaning) + "</dd>";
+    })
+    .join("");
+};
+
 window.BF_popupFields = function (s) {
   const when = window.BF_formatWhen(s);
+  const klass = window.BF_CLASSES[s.classCode] || window.BF_CLASSES.B;
   return {
     location: s.place + " — " + s.region,
     date: when.date,
     time: when.time,
     type: s.type,
-    klass: "Class " + s.classCode,
+    klass: klass.label,
+    classMeaning: klass.meaning,
     url: s.url,
   };
 };
