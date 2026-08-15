@@ -4,7 +4,7 @@ Live map of reported Bigfoot sightings across the contiguous United States, usin
 
 ## Features
 
-- Trail Cam infrared map (primary design), plus Ranger Log and Contour Ops layouts
+- Trail Cam infrared map with walking Bigfoot markers
 - Timeframes: **Recently posted** (default), This year, All time
 - Click a silhouette for location, date, time, and type (visual or sounds / tracks)
 - Full write-ups stay on BFRO; this app maps published report metadata and links back
