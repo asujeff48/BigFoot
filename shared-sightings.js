@@ -635,6 +635,33 @@ window.BF_inWindow = function (s, range) {
   return true;
 };
 
+window.BF_NEAR_MILES = 150;
+window.BF_EARTH_MILES = 3958.7613;
+
+window.BF_milesBetween = function (lat1, lng1, lat2, lng2) {
+  const toRad = function (d) {
+    return (d * Math.PI) / 180;
+  };
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * window.BF_EARTH_MILES * Math.asin(Math.min(1, Math.sqrt(a)));
+};
+
+window.BF_nearOrigin = function (sightings, origin, miles) {
+  const radius = miles == null ? window.BF_NEAR_MILES : miles;
+  return sightings.filter(function (s) {
+    return window.BF_milesBetween(origin.lat, origin.lng, s.lat, s.lng) <= radius;
+  });
+};
+
+window.BF_formatMiles = function (miles) {
+  if (miles < 1) return "under 1 mi";
+  return Math.round(miles) + " mi";
+};
+
 window.BF_esc = function (str) {
   return String(str)
     .replace(/&/g, "&amp;")

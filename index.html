@@ -167,6 +167,24 @@
       font-weight: 600;
     }
 
+    .ranges + .ranges {
+      margin-top: 0.4rem;
+    }
+
+    .ranges button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .you-are-here {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--ir);
+      border: 2px solid #041008;
+      box-shadow: 0 0 0 3px rgba(109, 255, 154, 0.28), 0 0 12px var(--ir);
+    }
+
     .meta {
       margin-top: 0.75rem;
       display: flex;
@@ -398,15 +416,18 @@
     <div class="footer-bar">
       <div class="footer-left">
         <div class="hud">
-          <div class="hud-label">Report window</div>
+          <div class="hud-label" id="hudLabel">Report window</div>
           <div class="ranges" role="tablist" aria-label="Time range">
             <button type="button" data-range="recent" class="active">Recently posted</button>
             <button type="button" data-range="year">This year</button>
             <button type="button" data-range="all">All time</button>
           </div>
+          <div class="ranges">
+            <button type="button" id="nearMeBtn">Sightings Near Me</button>
+          </div>
           <div class="meta">
             <span id="countLabel">0 contacts</span>
-            <span>BFRO · CAM-07</span>
+            <span id="camLabel">BFRO · CAM-07</span>
           </div>
         </div>
         <div class="rec"><span class="rec-dot" aria-hidden="true"></span> REC · LIVE OVERLAY</div>
@@ -459,14 +480,70 @@
     document.getElementById("classLegend").innerHTML = BF_classLegendHtml();
 
     const layer = L.layerGroup().addTo(map);
+    const hereLayer = L.layerGroup().addTo(map);
+    const nearMeBtn = document.getElementById("nearMeBtn");
+    const hudLabel = document.getElementById("hudLabel");
+    const countLabel = document.getElementById("countLabel");
+    const camLabel = document.getElementById("camLabel");
+    const hereIcon = L.divIcon({
+      className: "bf-div-icon",
+      html: '<div class="you-are-here" title="Your location"></div>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+
     let activeRange = "recent";
+    let nearMe = false;
+    let userOrigin = null;
+    let hereCircle = null;
+
+    function visibleSightings() {
+      if (nearMe && userOrigin) return BF_nearOrigin(BF_SIGHTINGS, userOrigin, BF_NEAR_MILES);
+      return BF_SIGHTINGS.filter((s) => BF_inWindow(s, activeRange));
+    }
+
+    function drawHere() {
+      hereLayer.clearLayers();
+      hereCircle = null;
+      if (!userOrigin) return;
+      hereCircle = L.circle([userOrigin.lat, userOrigin.lng], {
+        radius: BF_NEAR_MILES * 1609.344,
+        color: "#6dff9a",
+        weight: 1,
+        dashArray: "5 7",
+        fillColor: "#6dff9a",
+        fillOpacity: 0.06,
+        interactive: false,
+      }).addTo(hereLayer);
+      L.marker([userOrigin.lat, userOrigin.lng], { icon: hereIcon, zIndexOffset: 800 })
+        .bindPopup("Your location · 150 mile radius")
+        .addTo(hereLayer);
+    }
+
+    function exitNearMe() {
+      nearMe = false;
+      userOrigin = null;
+      hereCircle = null;
+      hereLayer.clearLayers();
+      nearMeBtn.classList.remove("active");
+      nearMeBtn.disabled = false;
+      hudLabel.textContent = "Report window";
+      camLabel.textContent = "BFRO · CAM-07";
+      document.querySelectorAll("[data-range]").forEach((b) => {
+        b.classList.toggle("active", b.dataset.range === activeRange);
+      });
+      map.setView([39.5, -98.35], 4);
+    }
 
     function render() {
       layer.clearLayers();
-      const visible = BF_SIGHTINGS.filter((s) => BF_inWindow(s, activeRange));
+      const visible = visibleSightings();
 
       visible.forEach((s) => {
         const f = BF_popupFields(s);
+        const milesAway = userOrigin
+          ? BF_formatMiles(BF_milesBetween(userOrigin.lat, userOrigin.lng, s.lat, s.lng))
+          : "";
         const marker = L.marker([s.lat, s.lng], { icon: bfIcon });
         marker.bindPopup(`
           <div class="popup-title">CONTACT</div>
@@ -474,22 +551,75 @@
           <div class="popup-row"><span>Date</span><span>${BF_esc(f.date)}</span></div>
           <div class="popup-row"><span>Time</span><span>${BF_esc(f.time)}</span></div>
           <div class="popup-row"><span>Type</span><span>${BF_esc(f.type)} · ${BF_esc(f.klass)}</span></div>
+          ${milesAway ? `<div class="popup-row"><span>Range</span><span>${BF_esc(milesAway)} away</span></div>` : ""}
           <p class="popup-note">${BF_esc(f.classMeaning)}</p>
           <a class="popup-link" href="${BF_esc(f.url)}" target="_blank" rel="noopener">BFRO report ${BF_esc(s.id)} ↗</a>
         `);
         marker.addTo(layer);
       });
 
-      document.getElementById("countLabel").textContent =
-        `${visible.length} contact${visible.length === 1 ? "" : "s"}`;
+      if (nearMe && userOrigin) {
+        countLabel.textContent =
+          `${visible.length} contact${visible.length === 1 ? "" : "s"} within 150 mi`;
+      } else {
+        countLabel.textContent =
+          `${visible.length} contact${visible.length === 1 ? "" : "s"}`;
+      }
     }
 
-    document.querySelectorAll(".ranges button").forEach((btn) => {
+    function onLocated(pos) {
+      nearMeBtn.disabled = false;
+      nearMe = true;
+      userOrigin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      nearMeBtn.classList.add("active");
+      document.querySelectorAll("[data-range]").forEach((b) => b.classList.remove("active"));
+      hudLabel.textContent = "Near you";
+      camLabel.textContent = "150 mi · all time";
+      drawHere();
+      render();
+      if (hereCircle) {
+        map.fitBounds(hereCircle.getBounds(), { padding: [36, 36], maxZoom: 8 });
+      }
+    }
+
+    function onLocateError(err) {
+      nearMeBtn.disabled = false;
+      if (err && err.code === 1) {
+        countLabel.textContent = "Location permission denied";
+      } else if (err && err.code === 3) {
+        countLabel.textContent = "Location timed out";
+      } else {
+        countLabel.textContent = "Could not read location";
+      }
+      if (!userOrigin) {
+        nearMe = false;
+        nearMeBtn.classList.remove("active");
+      }
+    }
+
+    document.querySelectorAll("[data-range]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".ranges button").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
         activeRange = btn.dataset.range;
+        if (nearMe) exitNearMe();
+        else {
+          document.querySelectorAll("[data-range]").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+        }
         render();
+      });
+    });
+
+    nearMeBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        countLabel.textContent = "Location not available";
+        return;
+      }
+      nearMeBtn.disabled = true;
+      countLabel.textContent = "Locating…";
+      navigator.geolocation.getCurrentPosition(onLocated, onLocateError, {
+        enableHighAccuracy: false,
+        timeout: 12000,
+        maximumAge: 300000,
       });
     });
 
