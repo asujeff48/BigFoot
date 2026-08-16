@@ -266,6 +266,17 @@
       padding: 0.85rem 1rem;
     }
 
+    .legend summary {
+      list-style: none;
+      cursor: default;
+    }
+
+    .legend summary::-webkit-details-marker,
+    .legend summary::marker {
+      display: none;
+      content: "";
+    }
+
     .legend-note {
       font-size: 0.62rem;
       line-height: 1.4;
@@ -399,12 +410,55 @@
       color: var(--ir);
     }
 
-    @media (max-width: 720px) {
-      .chrome { padding: 1rem; }
-      .brand { font-size: 3.2rem; }
-      .footer-bar { left: 1rem; right: 1rem; bottom: 1rem; flex-direction: column; align-items: start; }
-      .hud { min-width: 0; width: 100%; }
-      .footer-right { align-items: stretch; max-width: none; width: 100%; }
+    @media (max-width: 720px), (max-height: 520px) {
+      .chrome { padding: 0.75rem 0.85rem 0; }
+      .brand { font-size: 2.35rem; }
+      .tagline,
+      .hint,
+      .rec { display: none; }
+      .footer-bar {
+        left: 0.75rem;
+        right: 0.75rem;
+        bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.45rem;
+      }
+      .hud {
+        min-width: 0;
+        width: 100%;
+        padding: 0.65rem 0.75rem;
+      }
+      .hud-label { margin-bottom: 0.35rem; }
+      .ranges button {
+        font-size: 0.62rem;
+        padding: 0.38rem 0.5rem;
+      }
+      .meta {
+        margin-top: 0.45rem;
+        font-size: 0.62rem;
+      }
+      .updated { font-size: 0.58rem; }
+      .footer-right {
+        align-items: stretch;
+        max-width: none;
+        width: 100%;
+      }
+      .legend {
+        padding: 0.55rem 0.75rem;
+      }
+      .legend summary {
+        cursor: pointer;
+      }
+      .legend summary::after {
+        content: " · tap";
+        color: var(--ir-dim);
+        letter-spacing: 0.08em;
+      }
+      .legend[open] summary::after { content: " · close"; }
+      .leaflet-top.leaflet-left {
+        margin-top: 3.4rem;
+      }
     }
   </style>
 </head>
@@ -443,25 +497,27 @@
         <div class="rec"><span class="rec-dot" aria-hidden="true"></span> REC · LIVE OVERLAY</div>
       </div>
       <div class="footer-right">
-        <div class="legend">
-          <div class="hud-label">BFRO class</div>
-          <p class="legend-note" id="classNote">A and B describe how clear the encounter was, not how believable it is.</p>
-          <dl class="legend-row" id="classLegend">
-            <dt>Class A</dt>
-            <dd>Clear sighting. Other animals can be ruled out with greater confidence.</dd>
-            <dt>Class B</dt>
-            <dd>Distant, poorly lit, or unclear view — or sounds and tracks with no clear visual.</dd>
-            <dt>Class C</dt>
-            <dd>Second-hand or untraceable story. Rarely shown on this map.</dd>
-          </dl>
-        </div>
+        <details class="legend" id="legendPanel" open>
+          <summary class="hud-label">BFRO class</summary>
+          <div class="legend-body">
+            <p class="legend-note" id="classNote">A and B describe how clear the encounter was, not how believable it is.</p>
+            <dl class="legend-row" id="classLegend">
+              <dt>Class A</dt>
+              <dd>Clear sighting. Other animals can be ruled out with greater confidence.</dd>
+              <dt>Class B</dt>
+              <dd>Distant, poorly lit, or unclear view — or sounds and tracks with no clear visual.</dd>
+              <dt>Class C</dt>
+              <dd>Second-hand or untraceable story. Rarely shown on this map.</dd>
+            </dl>
+          </div>
+        </details>
         <div class="hint">Scroll to zoom · drag to pan · tap a silhouette</div>
       </div>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="./shared-sightings.js?v=6"></script>
+  <script src="./shared-sightings.js?v=7"></script>
   <script>
     const map = L.map("map", {
       center: [39.5, -98.35],
@@ -700,6 +756,25 @@
     });
 
     render();
+
+    const legendPanel = document.getElementById("legendPanel");
+    const phoneQuery = window.matchMedia("(max-width: 720px), (max-height: 520px)");
+
+    function syncPhoneLayout() {
+      const phone = phoneQuery.matches;
+      document.documentElement.classList.toggle("is-phone", phone);
+      if (legendPanel) {
+        if (phone) legendPanel.removeAttribute("open");
+        else legendPanel.setAttribute("open", "");
+      }
+      setTimeout(function () {
+        map.invalidateSize();
+      }, 50);
+    }
+
+    if (phoneQuery.addEventListener) phoneQuery.addEventListener("change", syncPhoneLayout);
+    else phoneQuery.addListener(syncPhoneLayout);
+    syncPhoneLayout();
   </script>
 </body>
 </html>
