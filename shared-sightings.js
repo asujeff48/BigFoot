@@ -793,7 +793,13 @@ window.BF_mergeSightings = function (bundled, fresh) {
 window.BF_formatUpdatedAt = function (iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "Unknown";
-  return d.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 };
 
 window.BF_NEAR_MILES = 150;

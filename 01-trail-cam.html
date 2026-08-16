@@ -438,15 +438,22 @@
             <span id="countLabel">0 contacts</span>
             <span id="camLabel">BFRO · CAM-07</span>
           </div>
-          <p class="updated" id="updatedLabel">Last updated —</p>
+          <p class="updated" id="updatedLabel">Last updated Aug 16, 2026, 2:00 PM</p>
         </div>
         <div class="rec"><span class="rec-dot" aria-hidden="true"></span> REC · LIVE OVERLAY</div>
       </div>
       <div class="footer-right">
         <div class="legend">
           <div class="hud-label">BFRO class</div>
-          <p class="legend-note" id="classNote"></p>
-          <dl class="legend-row" id="classLegend"></dl>
+          <p class="legend-note" id="classNote">A and B describe how clear the encounter was, not how believable it is.</p>
+          <dl class="legend-row" id="classLegend">
+            <dt>Class A</dt>
+            <dd>Clear sighting. Other animals can be ruled out with greater confidence.</dd>
+            <dt>Class B</dt>
+            <dd>Distant, poorly lit, or unclear view — or sounds and tracks with no clear visual.</dd>
+            <dt>Class C</dt>
+            <dd>Second-hand or untraceable story. Rarely shown on this map.</dd>
+          </dl>
         </div>
         <div class="hint">Scroll to zoom · drag to pan · tap a silhouette</div>
       </div>
@@ -454,7 +461,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="./shared-sightings.js"></script>
+  <script src="./shared-sightings.js?v=6"></script>
   <script>
     const map = L.map("map", {
       center: [39.5, -98.35],
@@ -476,7 +483,9 @@
       opacity: 0.85,
     }).addTo(map);
 
-    const iconHtml = BF_markerSvg("#6dff9a", 32, 42, { glow: true });
+    const iconHtml = typeof BF_markerSvg === "function"
+      ? BF_markerSvg("#6dff9a", 32, 42, { glow: true })
+      : "";
 
     const bfIcon = L.divIcon({
       className: "bf-div-icon",
@@ -486,8 +495,12 @@
       popupAnchor: [0, -38],
     });
 
-    document.getElementById("classNote").textContent = BF_CLASS_NOTE;
-    document.getElementById("classLegend").innerHTML = BF_classLegendHtml();
+    if (typeof BF_CLASS_NOTE === "string") {
+      document.getElementById("classNote").textContent = BF_CLASS_NOTE;
+    }
+    if (typeof BF_classLegendHtml === "function") {
+      document.getElementById("classLegend").innerHTML = BF_classLegendHtml();
+    }
 
     const layer = L.layerGroup().addTo(map);
     const hereLayer = L.layerGroup().addTo(map);
@@ -508,12 +521,15 @@
     let nearMe = false;
     let userOrigin = null;
     let hereCircle = null;
-    let lastUpdatedIso = BF_SNAPSHOT_AT;
+    let lastUpdatedIso = typeof BF_SNAPSHOT_AT === "string" ? BF_SNAPSHOT_AT : "2026-08-16T18:00:00.000Z";
 
     function showUpdated(iso, note) {
       lastUpdatedIso = iso || lastUpdatedIso;
+      const when = typeof BF_formatUpdatedAt === "function"
+        ? BF_formatUpdatedAt(lastUpdatedIso)
+        : lastUpdatedIso;
       updatedLabel.textContent =
-        (note ? note + " · " : "") + "Last updated " + BF_formatUpdatedAt(lastUpdatedIso);
+        (note ? note + " · " : "") + "Last updated " + when;
     }
 
     function restoreCache() {
