@@ -194,6 +194,14 @@
       color: var(--warn);
     }
 
+    .updated {
+      margin-top: 0.45rem;
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
+      color: var(--fog);
+      line-height: 1.4;
+    }
+
     .footer-bar {
       position: absolute;
       z-index: 5;
@@ -424,11 +432,13 @@
           </div>
           <div class="ranges">
             <button type="button" id="nearMeBtn">Sightings Near Me</button>
+            <button type="button" id="updateBtn">Update Sightings Now</button>
           </div>
           <div class="meta">
             <span id="countLabel">0 contacts</span>
             <span id="camLabel">BFRO · CAM-07</span>
           </div>
+          <p class="updated" id="updatedLabel">Last updated —</p>
         </div>
         <div class="rec"><span class="rec-dot" aria-hidden="true"></span> REC · LIVE OVERLAY</div>
       </div>
@@ -482,9 +492,11 @@
     const layer = L.layerGroup().addTo(map);
     const hereLayer = L.layerGroup().addTo(map);
     const nearMeBtn = document.getElementById("nearMeBtn");
+    const updateBtn = document.getElementById("updateBtn");
     const hudLabel = document.getElementById("hudLabel");
     const countLabel = document.getElementById("countLabel");
     const camLabel = document.getElementById("camLabel");
+    const updatedLabel = document.getElementById("updatedLabel");
     const hereIcon = L.divIcon({
       className: "bf-div-icon",
       html: '<div class="you-are-here" title="Your location"></div>',
@@ -496,6 +508,30 @@
     let nearMe = false;
     let userOrigin = null;
     let hereCircle = null;
+    let lastUpdatedIso = BF_SNAPSHOT_AT;
+
+    function showUpdated(iso, note) {
+      lastUpdatedIso = iso || lastUpdatedIso;
+      updatedLabel.textContent =
+        (note ? note + " · " : "") + "Last updated " + BF_formatUpdatedAt(lastUpdatedIso);
+    }
+
+    function restoreCache() {
+      try {
+        const raw = localStorage.getItem(BF_CACHE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data || !Array.isArray(data.sightings) || !data.sightings.length || !data.updatedAt) return false;
+        window.BF_SIGHTINGS = data.sightings;
+        lastUpdatedIso = data.updatedAt;
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    restoreCache();
+    showUpdated(lastUpdatedIso);
 
     function visibleSightings() {
       if (nearMe && userOrigin) return BF_nearOrigin(BF_SIGHTINGS, userOrigin, BF_NEAR_MILES);
@@ -621,6 +657,30 @@
         timeout: 12000,
         maximumAge: 300000,
       });
+    });
+
+    updateBtn.addEventListener("click", async () => {
+      updateBtn.disabled = true;
+      showUpdated(lastUpdatedIso, "Updating from BFRO");
+      try {
+        const res = await fetch(BF_NEW_ADDITIONS_URL, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const kml = await res.text();
+        const fresh = BF_parseNewAdditionsKml(kml);
+        if (!fresh.length) throw new Error("empty");
+        window.BF_SIGHTINGS = BF_mergeSightings(BF_SIGHTINGS_BUNDLED.slice(), fresh);
+        const updatedAt = new Date().toISOString();
+        localStorage.setItem(
+          BF_CACHE_KEY,
+          JSON.stringify({ updatedAt: updatedAt, sightings: window.BF_SIGHTINGS })
+        );
+        showUpdated(updatedAt);
+        render();
+      } catch (err) {
+        showUpdated(lastUpdatedIso, "Update failed");
+      } finally {
+        updateBtn.disabled = false;
+      }
     });
 
     render();

@@ -626,13 +626,174 @@ window.BF_SIGHTINGS = [
   },
 ];
 
+window.BF_SIGHTINGS_BUNDLED = window.BF_SIGHTINGS.slice();
+window.BF_SNAPSHOT_AT = "2026-08-16T18:00:00.000Z";
+window.BF_NEW_ADDITIONS_URL = "/bfro/new-additions.kml";
+window.BF_CACHE_KEY = "bf-sightings-v1";
+
 window.BF_RECENT_SINCE = "2026-05-01";
-window.BF_YEAR = "2026";
+window.BF_YEAR = String(new Date().getFullYear());
 
 window.BF_inWindow = function (s, range) {
-  if (range === "recent") return s.postedOn >= window.BF_RECENT_SINCE;
+  if (range === "recent") return s.recentFeed || s.postedOn >= window.BF_RECENT_SINCE;
   if (range === "year") return String(s.sightingOn).slice(0, 4) === window.BF_YEAR;
   return true;
+};
+
+window.BF_MONTHS = {
+  january: "01",
+  february: "02",
+  march: "03",
+  april: "04",
+  may: "05",
+  june: "06",
+  july: "07",
+  august: "08",
+  september: "09",
+  october: "10",
+  november: "11",
+  december: "12",
+};
+
+window.BF_inferType = function (title, classCode) {
+  const t = String(title || "").toLowerCase();
+  const sound = /whoop|knock|footprint|footprints|track|tracks|vocal|vocals|sound|howl|scream/.test(t);
+  const visual = /sighting|observe|observed|saw |visual|motorist/.test(t);
+  if (sound && !visual) return "Sounds / tracks";
+  if (classCode === "A") return "Visual";
+  if (sound) return "Sounds / tracks";
+  return "Possible visual";
+};
+
+window.BF_inferTime = function (title) {
+  const text = String(title || "");
+  const clock = text.match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/i);
+  if (clock) return clock[1].replace(/\s+/g, " ");
+  const hour = text.match(/\b(\d{1,2}\s*(?:AM|PM))\b/i);
+  if (hour) return hour[1].replace(/\s+/g, " ");
+  if (/daylight/i.test(text)) return "Daylight";
+  if (/\bdusk\b/i.test(text)) return "Dusk";
+  if (/\bnight\b|\bmidnight\b/i.test(text)) return "Night";
+  return "Not reported";
+};
+
+window.BF_parseNewAdditionsKml = function (kml) {
+  const out = [];
+  const seen = {};
+  const blocks = String(kml).match(/<Placemark>[\s\S]*?<\/Placemark>/g) || [];
+
+  blocks.forEach(function (block) {
+    if (/Location Boundaries/i.test(block)) return;
+    if (!/<Point>/i.test(block)) return;
+
+    const idM = block.match(/show_report\.asp\?id=(\d+)/i);
+    if (!idM || seen[idM[1]]) return;
+
+    const countyM = block.match(/Class [ABC]<\/a>;\s*([^<]+)/i);
+    if (!countyM) return;
+
+    const coordM = block.match(/<coordinates>\s*([-\d.]+)\s*,\s*([-\d.]+)/i);
+    if (!coordM) return;
+
+    const lng = parseFloat(coordM[1]);
+    const lat = parseFloat(coordM[2]);
+    if (lat < 24.4 || lat > 49.4 || lng < -124.8 || lng > -66.9) return;
+
+    const classM = block.match(/Class ([ABC])/);
+    const classCode = classM ? classM[1] : "B";
+    const titleM = block.match(/Report\s+\d+:\s*([^<]+)/i);
+    const title = titleM ? titleM[1].replace(/^\s*RECENT:\s*/i, "").trim() : "BFRO report " + idM[1];
+    const whenM = block.match(/<when>\s*(\d{4}-\d{2}-\d{2})/i);
+    const nameM = block.match(/<name>\s*([^<]+)/i);
+    const folder = nameM ? nameM[1].trim() : "";
+    const monthM = folder.match(
+      /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/i
+    );
+
+    let sightingOn = whenM ? whenM[1] : "";
+    let postedOn = whenM ? whenM[1] : "";
+    let sightingPrecision = "day";
+
+    if (monthM) {
+      const ym = monthM[2] + "-" + window.BF_MONTHS[monthM[1].toLowerCase()];
+      if (whenM && whenM[1].slice(0, 7) === ym) {
+        sightingOn = whenM[1];
+        sightingPrecision = "day";
+      } else {
+        sightingOn = ym + "-01";
+        sightingPrecision = "month";
+      }
+    }
+
+    if (!sightingOn) return;
+
+    seen[idM[1]] = true;
+    out.push({
+      id: idM[1],
+      lat: lat,
+      lng: lng,
+      place: title,
+      region: countyM[1].trim(),
+      sightingOn: sightingOn,
+      sightingPrecision: sightingPrecision,
+      sightingTime: window.BF_inferTime(title),
+      postedOn: postedOn || sightingOn,
+      classCode: classCode,
+      type: window.BF_inferType(title, classCode),
+      url: "https://www.bfro.net/GDB/show_report.asp?id=" + idM[1],
+      source: "BFRO",
+      recentFeed: true,
+    });
+  });
+
+  return out;
+};
+
+window.BF_mergeSightings = function (bundled, fresh) {
+  const bundledById = {};
+  (bundled || []).forEach(function (s) {
+    bundledById[s.id] = s;
+  });
+  const seen = {};
+  const merged = [];
+
+  (fresh || []).forEach(function (s) {
+    seen[s.id] = true;
+    const old = bundledById[s.id];
+    if (old) {
+      merged.push({
+        id: s.id,
+        lat: s.lat,
+        lng: s.lng,
+        place: old.place,
+        region: old.region,
+        sightingOn: old.sightingPrecision === "day" ? old.sightingOn : s.sightingOn,
+        sightingPrecision: old.sightingPrecision === "day" ? old.sightingPrecision : s.sightingPrecision,
+        sightingTime: old.sightingTime && old.sightingTime !== "Not reported" ? old.sightingTime : s.sightingTime,
+        postedOn: s.postedOn || old.postedOn,
+        classCode: s.classCode || old.classCode,
+        type: old.type,
+        url: s.url || old.url,
+        source: "BFRO",
+        recentFeed: true,
+      });
+    } else {
+      merged.push(s);
+    }
+  });
+
+  (bundled || []).forEach(function (s) {
+    if (seen[s.id]) return;
+    merged.push(Object.assign({}, s, { recentFeed: false }));
+  });
+
+  return merged;
+};
+
+window.BF_formatUpdatedAt = function (iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Unknown";
+  return d.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 };
 
 window.BF_NEAR_MILES = 150;
