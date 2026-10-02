@@ -425,6 +425,13 @@
       color: var(--ir);
     }
 
+    @media (max-width: 720px) {
+      html, body, .stage {
+        height: 100dvh;
+        max-height: 100dvh;
+      }
+    }
+
     @media (max-width: 720px), (max-height: 520px) {
       .chrome { padding: 0.75rem 0.85rem 0; }
       .funapps-home {
@@ -660,7 +667,8 @@
       document.querySelectorAll("[data-range]").forEach((b) => {
         b.classList.toggle("active", b.dataset.range === activeRange);
       });
-      map.setView([39.5, -98.35], 4);
+      keepCountryFit = true;
+      showCountry();
     }
 
     function render() {
@@ -777,6 +785,36 @@
 
     render();
 
+    const LOWER_48 = L.latLngBounds([24.5, -124.8], [49.2, -66.9]);
+    const phoneWidthQuery = window.matchMedia("(max-width: 720px)");
+    let applyingView = false;
+    let keepCountryFit = true;
+
+    function showCountry() {
+      if (!keepCountryFit) return;
+      applyingView = true;
+      if (phoneWidthQuery.matches) {
+        map.invalidateSize({ animate: false });
+        const header = document.querySelector(".chrome");
+        const footer = document.querySelector(".footer-bar");
+        const top = header ? Math.round(header.getBoundingClientRect().bottom) + 10 : 16;
+        const footerTop = footer ? footer.getBoundingClientRect().top : map.getSize().y;
+        const bottom = Math.max(16, Math.round(map.getSize().y - footerTop) + 10);
+        map.fitBounds(LOWER_48, {
+          paddingTopLeft: [10, top],
+          paddingBottomRight: [10, bottom],
+          animate: false,
+        });
+      } else {
+        map.setView([39.5, -98.35], 4, { animate: false });
+      }
+      applyingView = false;
+    }
+
+    map.on("dragstart zoomstart", () => {
+      if (!applyingView) keepCountryFit = false;
+    });
+
     const legendPanel = document.getElementById("legendPanel");
     const phoneQuery = window.matchMedia("(max-width: 720px), (max-height: 520px)");
 
@@ -789,6 +827,7 @@
       }
       setTimeout(function () {
         map.invalidateSize();
+        showCountry();
       }, 50);
     }
 
